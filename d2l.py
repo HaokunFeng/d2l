@@ -165,6 +165,11 @@ class d2l:
             data.DataLoader(mnist_train, batch_size, shuffle=True, num_workers=d2l.get_dataloader_workers()),
             data.DataLoader(mnist_test, batch_size, shuffle=False, num_workers=d2l.get_dataloader_workers())
         )
+    
+    @staticmethod
+    def load_array(data_arrays, batch_size, is_train=True):
+        dataset = data.TensorDataset(*data_arrays)
+        return data.DataLoader(dataset, batch_size, shuffle=is_train)
 
     @staticmethod
     def accuracy(y_hat, y):
@@ -240,6 +245,17 @@ class d2l:
         preds = d2l.get_fashion_mnist_labels(net(X).argmax(axis=1))
         titles = [true + '\n' + pred for true, pred in zip(trues, preds)]
         d2l.show_images(X[0:n].reshape((n, 28, 28)), 1, n, titles=titles[0:n])
+    
+    @staticmethod
+    def evaluate_loss(net, data_iter, loss):
+        """Evaluate the loss on the dataset."""
+        metric = d2l.Accumulator(2)
+        for X, y in data_iter:
+            out = net(X)
+            y = y.reshape(out.shape)
+            l = loss(out, y)
+            metric.add(l.sum(), l.numel())
+        return metric[0] / metric[1]
     
     class Animator:
         """Plotting class for training."""
