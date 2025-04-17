@@ -4,6 +4,7 @@ import time
 import numpy as np
 import torch
 from torch import nn
+from torch.nn import functional as F
 import torchvision
 from torch.utils import data
 from torchvision import transforms
@@ -12,6 +13,8 @@ from IPython import display
 class d2l:
     """Deep Learning Utilities"""
     
+    # -------------------------------------------------------------------------------
+    # Visualization
     @staticmethod
     def use_svg_display():
         """Use SVG for matplotlib."""
@@ -67,6 +70,8 @@ class d2l:
                 axes.plot(y, fmt)
         d2l.set_axes(axes, xlabel, ylabel, xlim, ylim, xscale, yscale, legend)
     
+    # ----------------------------------------------------------------------------------------
+    # Basic loss and optimization functions
     @staticmethod
     def synthetic_data(w, b, num_examples):
         """Generate y = Xw + b + noise."""
@@ -93,6 +98,8 @@ class d2l:
                 param -= lr * param.grad / batch_size
                 param.grad.zero_()
 
+    # ----------------------------------------------------------------------------------------
+    # Timer
     class Timer:
         """Timer for measuring time taken by a block of code."""
         
@@ -118,6 +125,8 @@ class d2l:
         def cumsum(self):
             return np.array(self.time).cumsum().tolist()
     
+    # ----------------------------------------------------------------------------------------
+    # Data loading and processing
     @staticmethod
     def get_fashion_mnist_labels(labels):
         """Return text labels for the Fashion-MNIST dataset."""
@@ -172,6 +181,8 @@ class d2l:
         dataset = data.TensorDataset(*data_arrays)
         return data.DataLoader(dataset, batch_size, shuffle=is_train)
 
+    # ----------------------------------------------------------------------------------------
+    # Evaluation Functions
     @staticmethod
     def accuracy(y_hat, y):
         """Compute the accuracy."""
@@ -207,8 +218,20 @@ class d2l:
                 y = y.to(device)
                 metric.add(d2l.accuracy(net(X), y), y.numel())
         return metric[0] / metric[1]
+    
+    @staticmethod
+    def evaluate_loss(net, data_iter, loss):
+        """Evaluate the loss on the dataset."""
+        metric = d2l.Accumulator(2)
+        for X, y in data_iter:
+            out = net(X)
+            y = y.reshape(out.shape)
+            l = loss(out, y)
+            metric.add(l.sum(), l.numel())
+        return metric[0] / metric[1]
         
-
+    # ----------------------------------------------------------------------------------------
+    # Accumulator
     class Accumulator:
         """Accumulate the sum and count."""
         
@@ -224,6 +247,8 @@ class d2l:
         def __getitem__(self, idx):
             return self.data[idx]
     
+    # ----------------------------------------------------------------------------------------
+    # Training and Predicting Functions
     @staticmethod
     def train_epoch_ch3(net, train_iter, loss, updater):
         """Train a model for one epoch."""
@@ -305,17 +330,10 @@ class d2l:
         titles = [true + '\n' + pred for true, pred in zip(trues, preds)]
         d2l.show_images(X[0:n].reshape((n, 28, 28)), 1, n, titles=titles[0:n])
     
-    @staticmethod
-    def evaluate_loss(net, data_iter, loss):
-        """Evaluate the loss on the dataset."""
-        metric = d2l.Accumulator(2)
-        for X, y in data_iter:
-            out = net(X)
-            y = y.reshape(out.shape)
-            l = loss(out, y)
-            metric.add(l.sum(), l.numel())
-        return metric[0] / metric[1]
     
+    
+    # ----------------------------------------------------------------------------------------
+    # Plotting, Visualization and Animation Functions
     class Animator:
         """Plotting class for training."""
         
@@ -355,6 +373,8 @@ class d2l:
             display.display(self.fig)
             display.clear_output(wait=True)
 
+    # ----------------------------------------------------------------------------------------
+    # Cross-Correlation Computation
     @staticmethod
     def corr2d(X, K):
         """Compute the 2D cross-correlation."""
@@ -365,6 +385,8 @@ class d2l:
                 Y[i, j] = (X[i:i + h, j:j + w] * K).sum()
         return Y
     
+    # ----------------------------------------------------------------------------------------
+    # GPU Functions
     @staticmethod
     def try_gpu(i=0):
         """Try to use GPU if available."""
@@ -378,3 +400,25 @@ class d2l:
         devices = [torch.device(f'cuda:{i}')
                    for i in range(torch.cuda.device_count())]
         return devices if devices else [torch.device('cpu')]
+    
+    # ----------------------------------------------------------------------------------------
+    # ResNet
+    class Residual(nn.Module):
+        def __init__(self, input_channels, num_channels, use_1x1conv=False, strides=1):
+            super().__init__()
+            self.conv1 = nn.Conv2d(input_channels, num_channels, kernel_size=3, padding=1, stride=strides)
+            self.conv2 = nn.Conv2d(num_channels, num_channels, kernel_size=3, padding=1)
+            if use_1x1conv:
+                self.conv3 = nn.Conv2d(input_channels, num_channels, kernel_size=1, stride=strides)
+            else:
+                self.conv3 = None
+            self.bn1 = nn.BatchNorm2d(num_channels)
+            self.bn2 = nn.BatchNorm2d(num_channels)
+
+        def forward(self, X):
+            Y = F.relu(self.bn1(self.conv1(X)))
+            Y = self.bn2(self.conv2(Y))
+            if self.conv3:
+                X = self.conv3(X)
+            Y += X
+            return F.relu(Y)
